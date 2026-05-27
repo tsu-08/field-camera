@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>現場撮影</title>
+<title>JIO写真撮影</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -51,12 +51,12 @@ video{width:100%;height:100%;object-fit:cover;display:block;}
   box-shadow:0 2px 14px rgba(0,0,0,.7);cursor:grab;}
 #sign-img:active{cursor:grabbing;}
 
-/* リサイズハンドル（右下角） */
+/* リサイズハンドル（右上角） */
 #resize-handle{
-  position:absolute;bottom:-6px;right:-6px;
+  position:absolute;top:-6px;right:-6px;
   width:18px;height:18px;
   background:#4af;border-radius:3px;
-  cursor:nwse-resize;touch-action:none;
+  cursor:nesw-resize;touch-action:none;
   display:flex;align-items:center;justify-content:center;
   font-size:10px;color:#000;font-weight:bold;
   box-shadow:0 1px 4px rgba(0,0,0,.5);
@@ -107,7 +107,7 @@ canvas{display:none;}
 <body>
 
 <div id="screen-start">
-  <h1>📷 現場撮影</h1>
+  <h1>📷 JIO写真撮影</h1>
   <button id="select-btn">📄 表示板PDFを選択</button>
   <div id="proc-msg">⏳ 処理中...</div>
   <div id="err-msg"></div>
@@ -118,9 +118,9 @@ canvas{display:none;}
   <div id="viewport">
     <video id="video" autoplay playsinline muted></video>
     <div id="sign-wrap">
-      <span id="drag-hint">☰ 移動 ↘ リサイズ</span>
+      <div id="resize-handle">↗</div>
+      <span id="drag-hint">☰ 移動</span>
       <img id="sign-img" src="" alt="表示板">
-      <div id="resize-handle">↘</div>
     </div>
   </div>
   <div id="controls">
@@ -281,12 +281,16 @@ signImg.addEventListener('load', () => {
 resizeHandle.addEventListener('mousedown',  startResize);
 resizeHandle.addEventListener('touchstart', startResize, {passive:false});
 
+let resizeStartTop = 0;
 function startResize(e) {
   e.preventDefault();
   e.stopPropagation();
   resizeActive  = true;
   resizeStartX  = getXY(e).x;
-  resizeStartW  = signWrap.getBoundingClientRect().width;
+  const sr = signWrap.getBoundingClientRect();
+  const vr = viewport.getBoundingClientRect();
+  resizeStartW   = sr.width;
+  resizeStartTop = sr.top - vr.top;
 }
 
 window.addEventListener('mousemove',  onMove);
@@ -313,9 +317,17 @@ function onMove(e) {
     e.preventDefault();
     const vr  = viewport.getBoundingClientRect();
     const dx  = p.x - resizeStartX;
-    let newW  = Math.max(60, Math.min(resizeStartW + dx, vr.width * 0.8));
-    signWrap.style.width = newW + 'px';
-    // height は img の auto（縦横比自動維持）なのでwidth変更だけでOK
+    const newW = Math.max(60, Math.min(resizeStartW + dx, vr.width * 0.8));
+    const newH = newW / signAspect; // 縦横比維持
+    // 右上固定：topを補正（高さ増加分だけ上にずらす）
+    const dh = newH - (resizeStartW / signAspect);
+    const newTop = Math.max(0, resizeStartTop - dh);
+    signWrap.style.width  = newW + 'px';
+    signWrap.style.top    = newTop + 'px';
+    signWrap.style.bottom = 'auto';
+    if (signWrap.style.right === 'auto') {
+      // left固定のままでOK
+    }
   }
 }
 
