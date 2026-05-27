@@ -10,7 +10,6 @@
 html,body{width:100%;height:100dvh;background:#000;overflow:hidden;
   font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;}
 
-/* ── 起動画面 ── */
 #screen-start{
   position:fixed;inset:0;background:#1a1a1a;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
@@ -27,7 +26,6 @@ html,body{width:100%;height:100dvh;background:#000;overflow:hidden;
 #err-msg{color:#f66;font-size:13px;display:none;text-align:center;padding:0 20px;}
 #file-input{display:none;}
 
-/* ── カメラ画面 ── */
 #screen-camera{
   position:fixed;inset:0;display:none;
   flex-direction:column;align-items:center;justify-content:flex-start;background:#000;
@@ -43,21 +41,32 @@ html,body{width:100%;height:100dvh;background:#000;overflow:hidden;
 }
 video{width:100%;height:100%;object-fit:cover;display:block;}
 
-/* 看板 */
+/* 看板ラッパー */
 #sign-wrap{
   position:absolute;bottom:12px;right:12px;
-  width:200px;touch-action:none;user-select:none;cursor:grab;
+  width:120px; /* デフォルト小さめ */
+  touch-action:none;user-select:none;
 }
-#sign-wrap:active{cursor:grabbing;}
 #sign-img{display:block;width:100%;height:auto;
-  box-shadow:0 2px 14px rgba(0,0,0,.7);}
+  box-shadow:0 2px 14px rgba(0,0,0,.7);cursor:grab;}
+#sign-img:active{cursor:grabbing;}
+
+/* リサイズハンドル（右下角） */
+#resize-handle{
+  position:absolute;bottom:-6px;right:-6px;
+  width:18px;height:18px;
+  background:#4af;border-radius:3px;
+  cursor:nwse-resize;touch-action:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:#000;font-weight:bold;
+  box-shadow:0 1px 4px rgba(0,0,0,.5);
+}
 #drag-hint{
   position:absolute;top:-20px;right:0;
   font-size:10px;color:rgba(255,255,255,.6);white-space:nowrap;
   pointer-events:none;text-shadow:0 1px 3px #000;
 }
 
-/* コントロールバー */
 #controls{
   width:100%;max-width:calc((100dvh - 64px) * 4 / 3);
   height:64px;background:rgba(0,0,0,.85);
@@ -80,7 +89,6 @@ video{width:100%;height:100%;object-fit:cover;display:block;}
 }
 #shutter:active{transform:scale(.85);background:#ccc;}
 
-/* プレビュー */
 #preview{
   display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:200;
   flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;
@@ -98,7 +106,6 @@ canvas{display:none;}
 </head>
 <body>
 
-<!-- 起動画面 -->
 <div id="screen-start">
   <h1>📷 現場撮影</h1>
   <button id="select-btn">📄 表示板PDFを選択</button>
@@ -107,13 +114,13 @@ canvas{display:none;}
   <input type="file" id="file-input" accept="application/pdf">
 </div>
 
-<!-- カメラ画面 -->
 <div id="screen-camera">
   <div id="viewport">
     <video id="video" autoplay playsinline muted></video>
     <div id="sign-wrap">
-      <span id="drag-hint">☰ ドラッグで移動</span>
+      <span id="drag-hint">☰ 移動 ↘ リサイズ</span>
       <img id="sign-img" src="" alt="表示板">
+      <div id="resize-handle">↘</div>
     </div>
   </div>
   <div id="controls">
@@ -125,7 +132,6 @@ canvas{display:none;}
   </div>
 </div>
 
-<!-- プレビュー -->
 <div id="preview">
   <img id="prev-img" src="" alt="">
   <div id="prev-meta"></div>
@@ -153,6 +159,7 @@ const video        = $('video');
 const viewport     = $('viewport');
 const signWrap     = $('sign-wrap');
 const signImg      = $('sign-img');
+const resizeHandle = $('resize-handle');
 const opSlider     = $('op-slider');
 const opVal        = $('op-val');
 const pdfBtn       = $('pdf-btn');
@@ -181,33 +188,27 @@ async function handlePDF(file) {
   procMsg.style.display = 'block';
   errMsg.style.display  = 'none';
   selectBtn.disabled    = true;
-
   try {
     const buf  = await file.arrayBuffer();
     const pdf  = await pdfjsLib.getDocument({ data: buf }).promise;
     const page = await pdf.getPage(1);
-
-    const scale = 3.0;
-    const vp    = page.getViewport({ scale });
-    pdfCanvas.width  = vp.width;
-    pdfCanvas.height = vp.height;
-
+    const vp   = page.getViewport({ scale: 3.0 });
+    pdfCanvas.width = vp.width; pdfCanvas.height = vp.height;
     await page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp }).promise;
-
-    const cropped = cropSign(pdfCanvas);
-    signImg.src = cropped;
-    // 看板を右下にリセット
-    signWrap.style.left = signWrap.style.top = 'auto';
+    signImg.src = cropSign(pdfCanvas);
+    // 位置・サイズリセット
+    signWrap.style.width  = '120px';
+    signWrap.style.left   = signWrap.style.top = 'auto';
     signWrap.style.right  = '12px';
     signWrap.style.bottom = '12px';
 
-    // カメラまだ起動していなければ起動
     if (!cameraStream) await startCamera();
-
     screenStart.style.display  = 'none';
     screenCamera.style.display = 'flex';
   } catch(e) {
-    errMsg.textContent = 'PDFの読み込みに失敗しました。\n' + e.message;
+    errMsg.textContent = e.name === 'NotAllowedError'
+      ? 'カメラの許可が必要です。ブラウザ設定でカメラをONにしてください。'
+      : 'エラー: ' + e.message;
     errMsg.style.display = 'block';
   } finally {
     procMsg.style.display = 'none';
@@ -219,60 +220,27 @@ async function handlePDF(file) {
 function cropSign(src) {
   const ctx = src.getContext('2d');
   const W = src.width, H = src.height;
-  const d = ctx.getImageData(0, 0, W, H).data;
-
-  const dark = (x, y) => {
-    const i = (y * W + x) * 4;
-    return d[i] < 90 && d[i+1] < 90 && d[i+2] < 90;
-  };
-
-  // 上半分を走査（注記テキストを除く）
-  const halfH = Math.floor(H * 0.6);
-  const rowThr = W * 0.12; // 行の12%以上が暗い → 枠線
-  let top = -1, bottom = -1;
-
-  for (let y = 0; y < halfH; y++) {
-    let cnt = 0;
-    for (let x = 0; x < W; x++) { if (dark(x, y)) cnt++; }
-    if (cnt > rowThr) {
-      if (top === -1) top = y;
-      bottom = y;
-    }
-  }
-
-  // 左右
-  let left = W, right = 0;
-  if (top !== -1) {
-    for (let y = top; y <= bottom; y++) {
-      for (let x = 0; x < W; x++)        { if (dark(x, y)) { left  = Math.min(left,  x); break; } }
-      for (let x = W-1; x >= 0; x--)     { if (dark(x, y)) { right = Math.max(right, x); break; } }
-    }
-  }
-
-  // フォールバック
-  if (top === -1 || right <= left) {
-    top = Math.floor(H*.05); bottom = Math.floor(H*.45);
-    left = Math.floor(W*.04); right = Math.floor(W*.96);
-  }
-
-  const pad = Math.floor(W * 0.008);
-  top    = Math.max(0,   top    - pad);
-  bottom = Math.min(H-1, bottom + pad);
-  left   = Math.max(0,   left   - pad);
-  right  = Math.min(W-1, right  + pad);
-
-  const crop = document.createElement('canvas');
-  crop.width  = right - left;
-  crop.height = bottom - top;
-  crop.getContext('2d').drawImage(src, left, top, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  const d = ctx.getImageData(0,0,W,H).data;
+  const dark = (x,y) => { const i=(y*W+x)*4; return d[i]<90&&d[i+1]<90&&d[i+2]<90; };
+  const halfH = Math.floor(H*.6), rowThr = W*.12;
+  let top=-1,bottom=-1,left=W,right=0;
+  for(let y=0;y<halfH;y++){let c=0;for(let x=0;x<W;x++)if(dark(x,y))c++;if(c>rowThr){if(top===-1)top=y;bottom=y;}}
+  if(top!==-1){for(let y=top;y<=bottom;y++){for(let x=0;x<W;x++){if(dark(x,y)){left=Math.min(left,x);break;}}for(let x=W-1;x>=0;x--){if(dark(x,y)){right=Math.max(right,x);break;}}}}
+  if(top===-1||right<=left){top=Math.floor(H*.05);bottom=Math.floor(H*.45);left=Math.floor(W*.04);right=Math.floor(W*.96);}
+  const pad=Math.floor(W*.008);
+  top=Math.max(0,top-pad);bottom=Math.min(H-1,bottom+pad);
+  left=Math.max(0,left-pad);right=Math.min(W-1,right+pad);
+  const crop=document.createElement('canvas');
+  crop.width=right-left;crop.height=bottom-top;
+  crop.getContext('2d').drawImage(src,left,top,crop.width,crop.height,0,0,crop.width,crop.height);
   return crop.toDataURL('image/png');
 }
 
 // ── カメラ ──
 async function startCamera() {
   cameraStream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1600 }, height: { ideal: 1200 } },
-    audio: false
+    video:{ facingMode:{ideal:'environment'}, width:{ideal:1600}, height:{ideal:1200} },
+    audio:false
   });
   video.srcObject = cameraStream;
   return new Promise(r => { video.onloadedmetadata = r; });
@@ -280,53 +248,101 @@ async function startCamera() {
 
 // ── 透過 ──
 opSlider.addEventListener('input', () => {
-  signWrap.style.opacity = opSlider.value / 100;
+  signImg.style.opacity = opSlider.value / 100;
   opVal.textContent = opSlider.value + '%';
 });
 
-// ── ドラッグ ──
-let drag = false, ox = 0, oy = 0;
-const xy = e => e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+// ── ドラッグ移動（看板画像をドラッグ） ──
+const getXY = e => e.touches
+  ? { x:e.touches[0].clientX, y:e.touches[0].clientY }
+  : { x:e.clientX, y:e.clientY };
 
-signWrap.addEventListener('mousedown',  e => { e.preventDefault(); drag=true; const r=signWrap.getBoundingClientRect(),p=xy(e); ox=p.x-r.left; oy=p.y-r.top; });
-signWrap.addEventListener('touchstart', e => { e.preventDefault(); drag=true; const r=signWrap.getBoundingClientRect(),p=xy(e); ox=p.x-r.left; oy=p.y-r.top; }, {passive:false});
+let dragActive=false, dragOX=0, dragOY=0;
 
-window.addEventListener('mousemove',  move);
-window.addEventListener('touchmove',  move, {passive:false});
-function move(e) {
-  if (!drag) return; e.preventDefault();
-  const p=xy(e), vr=viewport.getBoundingClientRect(), sr=signWrap.getBoundingClientRect();
-  let nx=p.x-vr.left-ox, ny=p.y-vr.top-oy;
-  nx=Math.max(0,Math.min(nx,vr.width-sr.width));
-  ny=Math.max(0,Math.min(ny,vr.height-sr.height));
-  signWrap.style.left=nx+'px'; signWrap.style.top=ny+'px';
-  signWrap.style.right='auto'; signWrap.style.bottom='auto';
+signImg.addEventListener('mousedown',  startDrag);
+signImg.addEventListener('touchstart', startDrag, {passive:false});
+
+function startDrag(e) {
+  e.preventDefault();
+  dragActive = true;
+  const r = signWrap.getBoundingClientRect(), p = getXY(e);
+  dragOX = p.x - r.left; dragOY = p.y - r.top;
 }
-window.addEventListener('mouseup',  () => drag=false);
-window.addEventListener('touchend', () => drag=false);
+
+// ── リサイズ（右下ハンドル） ──
+// 縦横比を img の自然比で固定
+let resizeActive=false, resizeStartX=0, resizeStartW=0;
+// 画像のアスペクト比（ロード後に取得）
+let signAspect = 1;
+signImg.addEventListener('load', () => {
+  signAspect = signImg.naturalWidth / signImg.naturalHeight;
+});
+
+resizeHandle.addEventListener('mousedown',  startResize);
+resizeHandle.addEventListener('touchstart', startResize, {passive:false});
+
+function startResize(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  resizeActive  = true;
+  resizeStartX  = getXY(e).x;
+  resizeStartW  = signWrap.getBoundingClientRect().width;
+}
+
+window.addEventListener('mousemove',  onMove);
+window.addEventListener('touchmove',  onMove, {passive:false});
+
+function onMove(e) {
+  const p = getXY(e);
+
+  if (dragActive) {
+    e.preventDefault();
+    const vr = viewport.getBoundingClientRect();
+    const sr = signWrap.getBoundingClientRect();
+    let nx = p.x - vr.left - dragOX;
+    let ny = p.y - vr.top  - dragOY;
+    nx = Math.max(0, Math.min(nx, vr.width  - sr.width));
+    ny = Math.max(0, Math.min(ny, vr.height - sr.height));
+    signWrap.style.left   = nx + 'px';
+    signWrap.style.top    = ny + 'px';
+    signWrap.style.right  = 'auto';
+    signWrap.style.bottom = 'auto';
+  }
+
+  if (resizeActive) {
+    e.preventDefault();
+    const vr  = viewport.getBoundingClientRect();
+    const dx  = p.x - resizeStartX;
+    let newW  = Math.max(60, Math.min(resizeStartW + dx, vr.width * 0.8));
+    signWrap.style.width = newW + 'px';
+    // height は img の auto（縦横比自動維持）なのでwidth変更だけでOK
+  }
+}
+
+window.addEventListener('mouseup',  endInteract);
+window.addEventListener('touchend', endInteract);
+function endInteract() { dragActive=false; resizeActive=false; }
 
 // ── 撮影 ──
 shutter.addEventListener('click', () => {
-  const vr=viewport.getBoundingClientRect();
-  const TW=1600, TH=1200;
+  const vr=viewport.getBoundingClientRect(), TW=1600, TH=1200;
   canvas.width=TW; canvas.height=TH;
   const ctx=canvas.getContext('2d');
-
   ctx.drawImage(video, 0, 0, TW, TH);
 
-  const ir=signImg.getBoundingClientRect();
-  const sx=(ir.left-vr.left)*(TW/vr.width);
-  const sy=(ir.top -vr.top )*(TH/vr.height);
-  const sw=ir.width *(TW/vr.width);
-  const sh=ir.height*(TH/vr.height);
+  const ir = signImg.getBoundingClientRect();
   ctx.save();
-  ctx.globalAlpha=parseFloat(signWrap.style.opacity||'1');
-  ctx.drawImage(signImg, sx, sy, sw, sh);
+  ctx.globalAlpha = parseFloat(signImg.style.opacity||'1');
+  ctx.drawImage(signImg,
+    (ir.left-vr.left)*(TW/vr.width),
+    (ir.top -vr.top )*(TH/vr.height),
+    ir.width *(TW/vr.width),
+    ir.height*(TH/vr.height)
+  );
   ctx.restore();
 
   capturedUrl  = canvas.toDataURL('image/jpeg', 0.75);
   capturedDate = new Date();
-
   prevMeta.textContent = '撮影日時: ' + capturedDate.toLocaleString('ja-JP');
   prevImg.src = capturedUrl;
   preview.classList.add('show');
@@ -335,20 +351,15 @@ shutter.addEventListener('click', () => {
 // ── 保存 ──
 saveBtn.addEventListener('click', () => {
   const ts = capturedDate.toISOString().replace(/[-:.TZ]/g,'').slice(0,15);
-  const a  = Object.assign(document.createElement('a'), { download:'photo_'+ts+'.jpg', href:capturedUrl });
-  a.click();
-
-  // 撮影日時メタJSON
-  const meta = { capturedAt: capturedDate.toISOString() };
-  Object.assign(document.createElement('a'), {
-    download:'photo_'+ts+'_meta.json',
-    href:'data:application/json,'+encodeURIComponent(JSON.stringify(meta,null,2))
-  }).click();
-
+  Object.assign(document.createElement('a'), { download:`photo_${ts}.jpg`, href:capturedUrl }).click();
   preview.classList.remove('show');
+  capturedUrl = null;
 });
 
-retakeBtn.addEventListener('click', () => { preview.classList.remove('show'); capturedUrl=null; });
+retakeBtn.addEventListener('click', () => {
+  preview.classList.remove('show');
+  capturedUrl = null;
+});
 </script>
 </body>
 </html>
