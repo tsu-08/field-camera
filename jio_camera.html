@@ -3,378 +3,411 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>JIO写真撮影</title>
-<link rel="manifest" href="./manifest.json">
-<link rel="apple-touch-icon" href="./icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="JIO撮影">
 <meta name="theme-color" content="#0a0a0a">
+<title>現場撮影</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{width:100%;height:100dvh;background:#000;overflow:hidden;
   font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;}
 
+/* ── 起動画面 ── */
 #screen-start{
-  position:fixed;inset:0;background:#1a1a1a;
+  position:fixed;inset:0;background:#111;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+  color:#fff;
 }
-#screen-start h1{color:#fff;font-size:18px;letter-spacing:.1em;}
-#select-btn{
-  width:72vw;max-width:280px;padding:18px 0;
-  background:#4af;color:#000;border:none;border-radius:12px;
-  font-size:17px;font-weight:bold;cursor:pointer;
-  box-shadow:0 4px 20px rgba(68,170,255,.4);
+#screen-start h1{font-size:20px;letter-spacing:.1em;}
+#btn-start{
+  padding:14px 40px;font-size:16px;border:none;border-radius:8px;
+  background:#2563eb;color:#fff;cursor:pointer;
 }
-#select-btn:active{opacity:.8;}
-#proc-msg{color:#4af;font-size:14px;display:none;}
-#err-msg{color:#f66;font-size:13px;display:none;text-align:center;padding:0 20px;}
-#file-input{display:none;}
 
+/* ── カメラ画面 ── */
 #screen-camera{
   position:fixed;inset:0;display:none;
-  flex-direction:column;align-items:center;justify-content:flex-start;background:#000;
+  flex-direction:column;align-items:center;justify-content:center;
+  background:#000;
 }
+#screen-camera.active{display:flex;}
 
+/* カメラコンテナ: JSでアスペクト比を動的にセット */
 #viewport{
   position:relative;
-  width:100vw;
-  height:calc(100vw * 3 / 4);
-  max-height:calc(100dvh - 64px);
-  max-width:calc((100dvh - 64px) * 4 / 3);
-  background:#111;overflow:hidden;flex-shrink:0;
+  background:#111;
+  overflow:hidden;
+  /* width/height は JS で設定 */
 }
-video{width:100%;height:100%;object-fit:cover;display:block;}
 
-/* 看板ラッパー */
+#video{
+  width:100%;height:100%;
+  object-fit:fill; /* コンテナと映像サイズが一致するのでfillでOK */
+  display:block;
+}
+#canvas{display:none;}
+
+/* ── 看板 ── */
 #sign-wrap{
-  position:absolute;bottom:12px;right:12px;
-  width:120px; /* デフォルト小さめ */
+  position:absolute;
+  bottom:16px;right:16px;
+  width:120px;
   touch-action:none;user-select:none;
+  cursor:grab;
 }
-#sign-img{display:block;width:100%;height:auto;
-  box-shadow:0 2px 14px rgba(0,0,0,.7);cursor:grab;}
-#sign-img:active{cursor:grabbing;}
+#sign-wrap:active{cursor:grabbing;}
 
-/* リサイズハンドル（右上角） */
+#sign-img{
+  width:100%;display:block;
+  pointer-events:none;
+}
+
+/* リサイズハンドル（右上） */
 #resize-handle{
-  position:absolute;top:-6px;right:-6px;
-  width:18px;height:18px;
-  background:#4af;border-radius:3px;
-  cursor:nesw-resize;touch-action:none;
+  position:absolute;top:-8px;right:-8px;
+  width:20px;height:20px;
+  background:#fff;border:2px solid #333;border-radius:50%;
+  cursor:nwse-resize;touch-action:none;
   display:flex;align-items:center;justify-content:center;
-  font-size:10px;color:#000;font-weight:bold;
-  box-shadow:0 1px 4px rgba(0,0,0,.5);
-}
-#drag-hint{
-  position:absolute;top:-20px;right:0;
-  font-size:10px;color:rgba(255,255,255,.6);white-space:nowrap;
-  pointer-events:none;text-shadow:0 1px 3px #000;
+  font-size:10px;color:#333;
 }
 
-#controls{
-  width:100%;max-width:calc((100dvh - 64px) * 4 / 3);
-  height:64px;background:rgba(0,0,0,.85);
-  display:flex;align-items:center;gap:8px;padding:0 12px;flex-shrink:0;
+/* ── UIバー ── */
+#ui-bar{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:10px 16px 16px;
+  background:rgba(0,0,0,.6);
+  display:flex;align-items:center;gap:12px;
+  flex-wrap:wrap;
 }
-.lbl{color:#fff;font-size:11px;white-space:nowrap;}
-#op-slider{flex:1;accent-color:#4af;}
-#op-val{color:#4af;font-size:11px;width:36px;text-align:right;}
-#pdf-btn{
-  font-size:11px;color:#bbb;background:none;
-  border:1px solid #444;border-radius:4px;padding:5px 8px;
-  cursor:pointer;white-space:nowrap;flex-shrink:0;
-}
-#shutter{
-  width:52px;height:52px;border-radius:50%;
-  background:#fff;border:4px solid rgba(255,255,255,.3);
+#ui-bar label{color:#ddd;font-size:12px;white-space:nowrap;}
+#opacity-slider{flex:1;min-width:80px;max-width:160px;}
+
+#btn-shutter{
+  margin-left:auto;
+  width:60px;height:60px;border-radius:50%;
+  background:#fff;border:4px solid #aaa;
   cursor:pointer;flex-shrink:0;
-  transition:transform .1s,background .1s;
-  box-shadow:0 2px 10px rgba(0,0,0,.5);
 }
-#shutter:active{transform:scale(.85);background:#ccc;}
+#btn-shutter:active{background:#ddd;}
 
+/* ── プレビュー ── */
 #preview{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:200;
-  flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px;
+  position:fixed;inset:0;background:rgba(0,0,0,.92);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  z-index:100;
 }
 #preview.show{display:flex;}
-#prev-img{max-width:100%;max-height:62dvh;border:1px solid #333;}
-#prev-meta{color:#888;font-size:12px;text-align:center;line-height:2;}
-.btns{display:flex;gap:12px;}
-.pbtn{padding:12px 28px;border-radius:6px;border:none;font-size:14px;font-weight:bold;cursor:pointer;}
-#save-btn{background:#4af;color:#000;}
-#retake-btn{background:#444;color:#fff;}
-
-canvas{display:none;}
+#prev-img{max-width:90vw;max-height:60dvh;object-fit:contain;}
+#prev-meta{color:#ccc;font-size:13px;}
+.preview-btns{display:flex;gap:16px;}
+.preview-btns button{
+  padding:10px 28px;border:none;border-radius:8px;font-size:15px;cursor:pointer;
+}
+#btn-save{background:#2563eb;color:#fff;}
+#btn-retake{background:#555;color:#fff;}
 </style>
 </head>
 <body>
 
+<!-- 起動画面 -->
 <div id="screen-start">
-  <h1>📷 JIO写真撮影</h1>
-  <button id="select-btn">📄 表示板PDFを選択</button>
-  <div id="proc-msg">⏳ 処理中...</div>
-  <div id="err-msg"></div>
-  <input type="file" id="file-input" accept="application/pdf">
+  <h1>JIO 現場撮影</h1>
+  <button id="btn-start">カメラ起動</button>
 </div>
 
+<!-- カメラ画面 -->
 <div id="screen-camera">
   <div id="viewport">
     <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <!-- 看板 -->
     <div id="sign-wrap">
       <div id="resize-handle">↗</div>
-      <span id="drag-hint">☰ 移動</span>
-      <img id="sign-img" src="" alt="表示板">
+      <canvas id="sign-img"></canvas>
     </div>
   </div>
-  <div id="controls">
-    <span class="lbl">透過</span>
-    <input type="range" id="op-slider" min="0" max="100" value="100" step="5">
-    <span id="op-val">100%</span>
-    <button id="pdf-btn">PDF変更</button>
-    <button id="shutter"></button>
+
+  <!-- UIバー -->
+  <div id="ui-bar">
+    <label>看板透過
+      <input id="opacity-slider" type="range" min="0" max="100" value="100">
+    </label>
+    <button id="btn-shutter"></button>
   </div>
 </div>
 
+<!-- プレビュー -->
 <div id="preview">
-  <img id="prev-img" src="" alt="">
+  <img id="prev-img" src="" alt="preview">
   <div id="prev-meta"></div>
-  <div class="btns">
-    <button class="pbtn" id="save-btn">💾 保存</button>
-    <button class="pbtn" id="retake-btn">↩ 撮り直し</button>
+  <div class="preview-btns">
+    <button id="btn-save">保存</button>
+    <button id="btn-retake">撮り直す</button>
   </div>
 </div>
-
-<canvas id="canvas"></canvas>
-<canvas id="pdf-canvas"></canvas>
 
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+// ── PDF看板描画 ──
+const SIGN_DATA = {
+  number: 'Y3346772',
+  company: '株式会社 日本住宅保証検査機構'
+};
 
-const $ = id => document.getElementById(id);
-const screenStart  = $('screen-start');
-const screenCamera = $('screen-camera');
-const fileInput    = $('file-input');
-const selectBtn    = $('select-btn');
-const procMsg      = $('proc-msg');
-const errMsg       = $('err-msg');
-const video        = $('video');
-const viewport     = $('viewport');
-const signWrap     = $('sign-wrap');
-const signImg      = $('sign-img');
-const resizeHandle = $('resize-handle');
-const opSlider     = $('op-slider');
-const opVal        = $('op-val');
-const pdfBtn       = $('pdf-btn');
-const shutter      = $('shutter');
-const preview      = $('preview');
-const prevImg      = $('prev-img');
-const prevMeta     = $('prev-meta');
-const saveBtn      = $('save-btn');
-const retakeBtn    = $('retake-btn');
-const canvas       = $('canvas');
-const pdfCanvas    = $('pdf-canvas');
+function drawSign(canvas) {
+  const W = 280, H = 210;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const lw = 3;
 
-let capturedUrl  = null;
-let capturedDate = null;
-let cameraStream = null;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = lw;
+  ctx.strokeRect(lw/2, lw/2, W-lw, H-lw);
 
-// ── PDF選択 ──
-selectBtn.addEventListener('click', () => fileInput.click());
-pdfBtn.addEventListener('click',    () => fileInput.click());
-fileInput.addEventListener('change', () => {
-  if (fileInput.files[0]) handlePDF(fileInput.files[0]);
-  fileInput.value = '';
-});
+  // ヘッダー「登録物件番号」
+  const headerH = H * 0.28;
+  ctx.font = `bold ${headerH*0.42}px 'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif`;
+  ctx.fillStyle = '#000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('登 録 物 件 番 号', W/2, headerH/2);
 
-async function handlePDF(file) {
-  procMsg.style.display = 'block';
-  errMsg.style.display  = 'none';
-  selectBtn.disabled    = true;
+  // 仕切り線
+  ctx.beginPath();
+  ctx.moveTo(lw/2, headerH);
+  ctx.lineTo(W-lw/2, headerH);
+  ctx.stroke();
+
+  // 番号
+  const numY = headerH;
+  const numH = H * 0.42;
+  ctx.font = `bold ${numH*0.62}px 'Arial Black',Arial,sans-serif`;
+  ctx.fillText(SIGN_DATA.number, W/2, numY + numH/2);
+
+  // 仕切り線
+  ctx.beginPath();
+  ctx.moveTo(lw/2, numY+numH);
+  ctx.lineTo(W-lw/2, numY+numH);
+  ctx.stroke();
+
+  // フッター
+  const footerY = numY + numH;
+  const footerH = H - footerY;
+  const logoSize = footerH * 0.72;
+  const logoX = W * 0.05;
+  const logoY = footerY + (footerH - logoSize) / 2;
+
+  // JIOロゴ背景
+  ctx.fillStyle = '#000';
+  ctx.fillRect(logoX, logoY, logoSize, logoSize);
+  // 三角（屋根）
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(logoX, logoY + logoSize*0.42);
+  ctx.lineTo(logoX + logoSize/2, logoY + logoSize*0.04);
+  ctx.lineTo(logoX + logoSize, logoY + logoSize*0.42);
+  ctx.closePath();
+  ctx.fill();
+  // JIO文字
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${logoSize*0.30}px 'Arial Black',Arial,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('JIO', logoX + logoSize/2, logoY + logoSize*0.72);
+
+  // 会社名
+  ctx.fillStyle = '#000';
+  const cfs = Math.min(footerH * 0.28, W * 0.052);
+  ctx.font = `bold ${cfs}px 'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif`;
+  ctx.textAlign = 'left';
+  const tx = logoX + logoSize + W*0.04;
+  ctx.fillText('株式会社', tx, footerY + footerH * 0.32);
+  ctx.fillText('日本住宅保証検査機構', tx, footerY + footerH * 0.68);
+}
+
+// ── 初期化 ──
+const btnStart   = document.getElementById('btn-start');
+const screenStart  = document.getElementById('screen-start');
+const screenCamera = document.getElementById('screen-camera');
+const video      = document.getElementById('video');
+const canvas     = document.getElementById('canvas');
+const viewport   = document.getElementById('viewport');
+const signWrap   = document.getElementById('sign-wrap');
+const signImg    = document.getElementById('sign-img');
+const resizeHandle = document.getElementById('resize-handle');
+const opacitySlider = document.getElementById('opacity-slider');
+const btnShutter = document.getElementById('btn-shutter');
+const preview    = document.getElementById('preview');
+const prevImg    = document.getElementById('prev-img');
+const prevMeta   = document.getElementById('prev-meta');
+const btnSave    = document.getElementById('btn-save');
+const btnRetake  = document.getElementById('btn-retake');
+
+drawSign(signImg);
+
+// ── カメラ起動 & アスペクト比自動検出 ──
+btnStart.addEventListener('click', async () => {
   try {
-    const buf  = await file.arrayBuffer();
-    const pdf  = await pdfjsLib.getDocument({ data: buf }).promise;
-    const page = await pdf.getPage(1);
-    const vp   = page.getViewport({ scale: 3.0 });
-    pdfCanvas.width = vp.width; pdfCanvas.height = vp.height;
-    await page.render({ canvasContext: pdfCanvas.getContext('2d'), viewport: vp }).promise;
-    signImg.src = cropSign(pdfCanvas);
-    // 位置・サイズリセット
-    signWrap.style.width  = '120px';
-    signWrap.style.left   = signWrap.style.top = 'auto';
-    signWrap.style.right  = '12px';
-    signWrap.style.bottom = '12px';
+    // まず理想サイズでリクエスト（デバイスのデフォルト比率を尊重）
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 4096 } },
+      audio: false
+    });
+    video.srcObject = stream;
 
-    if (!cameraStream) await startCamera();
-    screenStart.style.display  = 'none';
-    screenCamera.style.display = 'flex';
+    video.addEventListener('loadedmetadata', () => {
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const aspect = vw / vh; // 実際のカメラ比率（16:9 や 4:3 など）
+
+      // ビューポートをカメラ比率に合わせてリサイズ
+      fitViewport(aspect);
+
+      screenStart.style.display = 'none';
+      screenCamera.classList.add('active');
+    }, { once: true });
+
   } catch(e) {
-    errMsg.textContent = e.name === 'NotAllowedError'
-      ? 'カメラの許可が必要です。ブラウザ設定でカメラをONにしてください。'
-      : 'エラー: ' + e.message;
-    errMsg.style.display = 'block';
-  } finally {
-    procMsg.style.display = 'none';
-    selectBtn.disabled    = false;
+    alert('カメラの起動に失敗しました: ' + e.message);
   }
-}
-
-// ── 枠検出・クロップ ──
-function cropSign(src) {
-  const ctx = src.getContext('2d');
-  const W = src.width, H = src.height;
-  const d = ctx.getImageData(0,0,W,H).data;
-  const dark = (x,y) => { const i=(y*W+x)*4; return d[i]<90&&d[i+1]<90&&d[i+2]<90; };
-  const halfH = Math.floor(H*.6), rowThr = W*.12;
-  let top=-1,bottom=-1,left=W,right=0;
-  for(let y=0;y<halfH;y++){let c=0;for(let x=0;x<W;x++)if(dark(x,y))c++;if(c>rowThr){if(top===-1)top=y;bottom=y;}}
-  if(top!==-1){for(let y=top;y<=bottom;y++){for(let x=0;x<W;x++){if(dark(x,y)){left=Math.min(left,x);break;}}for(let x=W-1;x>=0;x--){if(dark(x,y)){right=Math.max(right,x);break;}}}}
-  if(top===-1||right<=left){top=Math.floor(H*.05);bottom=Math.floor(H*.45);left=Math.floor(W*.04);right=Math.floor(W*.96);}
-  const pad=Math.floor(W*.008);
-  top=Math.max(0,top-pad);bottom=Math.min(H-1,bottom+pad);
-  left=Math.max(0,left-pad);right=Math.min(W-1,right+pad);
-  const crop=document.createElement('canvas');
-  crop.width=right-left;crop.height=bottom-top;
-  crop.getContext('2d').drawImage(src,left,top,crop.width,crop.height,0,0,crop.width,crop.height);
-  return crop.toDataURL('image/png');
-}
-
-// ── カメラ ──
-async function startCamera() {
-  cameraStream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:{ideal:'environment'}, width:{ideal:1600}, height:{ideal:1200} },
-    audio:false
-  });
-  video.srcObject = cameraStream;
-  return new Promise(r => { video.onloadedmetadata = r; });
-}
-
-// ── 透過 ──
-opSlider.addEventListener('input', () => {
-  signImg.style.opacity = opSlider.value / 100;
-  opVal.textContent = opSlider.value + '%';
 });
 
-// ── ドラッグ移動（看板画像をドラッグ） ──
-const getXY = e => e.touches
-  ? { x:e.touches[0].clientX, y:e.touches[0].clientY }
-  : { x:e.clientX, y:e.clientY };
+function fitViewport(aspect) {
+  const sw = window.innerWidth;
+  const sh = window.innerHeight - 90; // UIバー分引く
 
-let dragActive=false, dragOX=0, dragOY=0;
+  let w, h;
+  if (sw / sh > aspect) {
+    // 縦が制限
+    h = sh;
+    w = h * aspect;
+  } else {
+    // 横が制限
+    w = sw;
+    h = w / aspect;
+  }
+  viewport.style.width  = w + 'px';
+  viewport.style.height = h + 'px';
+}
 
-signImg.addEventListener('mousedown',  startDrag);
-signImg.addEventListener('touchstart', startDrag, {passive:false});
+window.addEventListener('resize', () => {
+  if (video.videoWidth) fitViewport(video.videoWidth / video.videoHeight);
+});
+
+// ── 看板ドラッグ ──
+function getXY(e) {
+  return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+                   : { x: e.clientX, y: e.clientY };
+}
+
+let dragActive = false, dragOX = 0, dragOY = 0;
+signWrap.addEventListener('mousedown',  startDrag);
+signWrap.addEventListener('touchstart', startDrag, { passive: false });
 
 function startDrag(e) {
+  if (e.target === resizeHandle) return;
   e.preventDefault();
   dragActive = true;
   const r = signWrap.getBoundingClientRect(), p = getXY(e);
   dragOX = p.x - r.left; dragOY = p.y - r.top;
 }
 
-// ── リサイズ（右下ハンドル） ──
-// 縦横比を img の自然比で固定
-let resizeActive=false, resizeStartX=0, resizeStartW=0;
-// 画像のアスペクト比（ロード後に取得）
-let signAspect = 1;
-signImg.addEventListener('load', () => {
-  signAspect = signImg.naturalWidth / signImg.naturalHeight;
-});
-
+// ── 看板リサイズ（右上ハンドル）──
+let resizeActive = false, resizeStartX = 0, resizeStartY = 0, resizeStartW = 0;
 resizeHandle.addEventListener('mousedown',  startResize);
-resizeHandle.addEventListener('touchstart', startResize, {passive:false});
+resizeHandle.addEventListener('touchstart', startResize, { passive: false });
 
-let resizeStartTop = 0;
 function startResize(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  resizeActive  = true;
-  resizeStartX  = getXY(e).x;
-  const sr = signWrap.getBoundingClientRect();
-  const vr = viewport.getBoundingClientRect();
-  resizeStartW   = sr.width;
-  resizeStartTop = sr.top - vr.top;
+  e.preventDefault(); e.stopPropagation();
+  resizeActive = true;
+  const p = getXY(e);
+  resizeStartX = p.x; resizeStartY = p.y;
+  resizeStartW = signWrap.getBoundingClientRect().width;
 }
 
 window.addEventListener('mousemove',  onMove);
-window.addEventListener('touchmove',  onMove, {passive:false});
+window.addEventListener('touchmove',  onMove, { passive: false });
 
 function onMove(e) {
   const p = getXY(e);
-
   if (dragActive) {
     e.preventDefault();
-    const vr = viewport.getBoundingClientRect();
-    const sr = signWrap.getBoundingClientRect();
+    const vr = viewport.getBoundingClientRect(), sr = signWrap.getBoundingClientRect();
     let nx = p.x - vr.left - dragOX;
     let ny = p.y - vr.top  - dragOY;
     nx = Math.max(0, Math.min(nx, vr.width  - sr.width));
     ny = Math.max(0, Math.min(ny, vr.height - sr.height));
-    signWrap.style.left   = nx + 'px';
-    signWrap.style.top    = ny + 'px';
-    signWrap.style.right  = 'auto';
-    signWrap.style.bottom = 'auto';
+    signWrap.style.left = nx + 'px'; signWrap.style.top = ny + 'px';
+    signWrap.style.right = 'auto'; signWrap.style.bottom = 'auto';
   }
-
   if (resizeActive) {
     e.preventDefault();
-    const vr  = viewport.getBoundingClientRect();
-    const dx  = p.x - resizeStartX;
+    const vr = viewport.getBoundingClientRect();
+    const dx = p.x - resizeStartX;
     const newW = Math.max(60, Math.min(resizeStartW + dx, vr.width * 0.8));
-    const newH = newW / signAspect; // 縦横比維持
-    // 右上固定：topを補正（高さ増加分だけ上にずらす）
-    const dh = newH - (resizeStartW / signAspect);
-    const newTop = Math.max(0, resizeStartTop - dh);
-    signWrap.style.width  = newW + 'px';
-    signWrap.style.top    = newTop + 'px';
-    signWrap.style.bottom = 'auto';
-    if (signWrap.style.right === 'auto') {
-      // left固定のままでOK
-    }
+    signWrap.style.width = newW + 'px';
   }
 }
 
 window.addEventListener('mouseup',  endInteract);
 window.addEventListener('touchend', endInteract);
-function endInteract() { dragActive=false; resizeActive=false; }
+function endInteract() { dragActive = false; resizeActive = false; }
+
+// ── 透過スライダー ──
+opacitySlider.addEventListener('input', () => {
+  signWrap.style.opacity = opacitySlider.value / 100;
+});
 
 // ── 撮影 ──
-shutter.addEventListener('click', () => {
-  const vr=viewport.getBoundingClientRect(), TW=1600, TH=1200;
-  canvas.width=TW; canvas.height=TH;
-  const ctx=canvas.getContext('2d');
+let capturedUrl = null, capturedDate = null;
+
+btnShutter.addEventListener('click', () => {
+  const vr = viewport.getBoundingClientRect();
+  const TW = video.videoWidth, TH = video.videoHeight;
+  canvas.width = TW; canvas.height = TH;
+  const ctx = canvas.getContext('2d');
+
+  // カメラ映像をそのままの解像度で描画
   ctx.drawImage(video, 0, 0, TW, TH);
 
-  const ir = signImg.getBoundingClientRect();
+  // 看板を映像解像度にスケールして描画
+  const sr = signWrap.getBoundingClientRect();
+  const scaleX = TW / vr.width, scaleY = TH / vr.height;
   ctx.save();
-  ctx.globalAlpha = parseFloat(signImg.style.opacity||'1');
-  ctx.drawImage(signImg,
-    (ir.left-vr.left)*(TW/vr.width),
-    (ir.top -vr.top )*(TH/vr.height),
-    ir.width *(TW/vr.width),
-    ir.height*(TH/vr.height)
+  ctx.globalAlpha = parseFloat(signWrap.style.opacity || '1');
+  ctx.drawImage(
+    signImg,
+    (sr.left - vr.left) * scaleX,
+    (sr.top  - vr.top ) * scaleY,
+    sr.width  * scaleX,
+    sr.height * scaleY
   );
   ctx.restore();
 
-  capturedUrl  = canvas.toDataURL('image/jpeg', 0.75);
+  capturedUrl  = canvas.toDataURL('image/jpeg', 0.85);
   capturedDate = new Date();
-  prevMeta.textContent = '撮影日時: ' + capturedDate.toLocaleString('ja-JP');
+  prevMeta.textContent = '撮影日時: ' + capturedDate.toLocaleString('ja-JP') + '　サイズ: ' + TW + '×' + TH;
   prevImg.src = capturedUrl;
   preview.classList.add('show');
 });
 
 // ── 保存 ──
-saveBtn.addEventListener('click', () => {
+btnSave.addEventListener('click', () => {
   const ts = capturedDate.toISOString().replace(/[-:.TZ]/g,'').slice(0,15);
-  Object.assign(document.createElement('a'), { download:`photo_${ts}.jpg`, href:capturedUrl }).click();
+  Object.assign(document.createElement('a'), {
+    download: `JIO_${SIGN_DATA.number}_${ts}.jpg`,
+    href: capturedUrl
+  }).click();
   preview.classList.remove('show');
   capturedUrl = null;
 });
 
-retakeBtn.addEventListener('click', () => {
+btnRetake.addEventListener('click', () => {
   preview.classList.remove('show');
   capturedUrl = null;
 });
