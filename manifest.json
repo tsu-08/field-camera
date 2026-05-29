@@ -1,0 +1,24 @@
+{
+  "name": "JIO写真撮影",
+  "short_name": "JIO撮影",
+  "description": "JIO表示板付き現場写真撮影アプリ",
+  "start_url": "./jio_camera.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
