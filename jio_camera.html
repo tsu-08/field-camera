@@ -288,7 +288,7 @@ function cropSignFromCanvas(srcCanvas) {
 // ── カメラ起動 ──
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:'environment' },
+    video:{ facingMode:'environment', width:{min:1920, ideal:9999}, height:{min:1080, ideal:9999} },
     audio:false
   });
   video.srcObject = stream;
