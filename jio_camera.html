@@ -288,7 +288,7 @@ function cropSignFromCanvas(srcCanvas) {
 // ── カメラ起動 ──
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:'environment', width:{ideal:4096}, height:{ideal:4096} },
+    video:{ facingMode:'environment' },
     audio:false
   });
   video.srcObject = stream;
@@ -449,14 +449,35 @@ btnShutter.addEventListener('click',()=>{
 });
 
 // ── 保存 ──
-btnSave.addEventListener('click',()=>{
-  const ts=capturedDate.toISOString().replace(/[-:.TZ]/g,'').slice(0,15);
-  const base=pdfFileName.replace(/\.pdf$/i,'')||'JIO';
-  Object.assign(document.createElement('a'),{
-    download:`${base}_${ts}.jpg`, href:capturedUrl
+btnSave.addEventListener('click', async () => {
+  const ts   = capturedDate.toISOString().replace(/[-:.TZ]/g,'').slice(0,15);
+  const base = pdfFileName.replace(/\.pdf$/i,'') || 'JIO';
+  const filename = `${base}_${ts}.jpg`;
+
+  // Blob変換
+  const res  = await fetch(capturedUrl);
+  const blob = await res.blob();
+  const file = new File([blob], filename, { type: 'image/jpeg' });
+
+  // Web Share API でフォト（ギャラリー）に保存
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: filename });
+      preview.classList.remove('show');
+      capturedUrl = null;
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return; // ユーザーがキャンセル
+      // 失敗したらフォールバック
+    }
+  }
+
+  // フォールバック: 通常ダウンロード
+  Object.assign(document.createElement('a'), {
+    download: filename, href: capturedUrl
   }).click();
   preview.classList.remove('show');
-  capturedUrl=null;
+  capturedUrl = null;
 });
 
 btnRetake.addEventListener('click',()=>{
