@@ -4,7 +4,7 @@
   "description": "JIO表示板付き現場写真撮影アプリ",
   "start_url": "./jio_camera.html",
   "display": "fullscreen",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
   "icons": [
