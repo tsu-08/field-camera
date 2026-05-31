@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="JIO撮影">
 <meta name="theme-color" content="#0a0a0a">
 <title>現場撮影</title>
+<link rel="manifest" href="./manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -120,6 +121,14 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;
 <!-- 起動画面 -->
 <div id="screen-start">
   <h1>JIO 現場撮影</h1>
+  <div id="ios-guide" style="display:none;
+    background:#1e3a5f;border-radius:10px;padding:12px 16px;
+    font-size:13px;color:#cce;line-height:1.7;text-align:center;
+    max-width:280px;">
+    📱 <b>ホーム画面への追加方法（iPhone）</b><br>
+    下の <b>共有ボタン（□↑）</b> をタップ<br>
+    →「<b>ホーム画面に追加</b>」を選択
+  </div>
   <label id="pdf-label">📄 PDFを選択
     <input id="pdf-input" type="file" accept="application/pdf">
   </label>
@@ -159,6 +168,15 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;
 </div>
 
 <script>
+// iOS判定してホーム画面追加案内を表示
+(function() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  if (isIOS && !isStandalone) {
+    document.getElementById('ios-guide').style.display = 'block';
+  }
+})();
+
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -484,6 +502,13 @@ btnRetake.addEventListener('click',()=>{
   preview.classList.remove('show');
   capturedUrl=null;
 });
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js');
+  });
+}
 </script>
 </body>
 </html>
